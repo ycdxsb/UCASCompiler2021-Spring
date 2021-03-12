@@ -7,7 +7,7 @@
 ## 课堂资料
 
 - 上课PPT：本科生课程网站
-- 课堂问题汇总：https://docs.qq.com/doc/DR0hwd1dYekFmTllO
+- [课堂问题汇总](https://docs.qq.com/doc/DR0hwd1dYekFmTllO)
 
 
 
