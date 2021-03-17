@@ -2,29 +2,25 @@
 
 > 中国科学院大学网络空间安全学院2021年春季编译原理
 
-
-
-## 课堂资料
+## 课程资料
 
 - 上课PPT：本科生课程网站
 - [课堂问题汇总](https://docs.qq.com/doc/DR0hwd1dYekFmTllO)
 
-
-
 ## 课程实验
 
-> 本课程实验基于中国科学技术大学编译原理H实验设计
+本学期编译原理实验目的是让同学们更好的熟悉现代化的编译链，了解语法树生成和中间代码生成的过程，以及如何根据自身需求定制化一门语言
 
-- [实验环境搭建](https://ycdxsb.gitbook.io/ucascompiler2021/environment/env)
-- 工具介绍
-  - [ANTLR4简介](https://ycdxsb.gitbook.io/ucascompiler2021/basicknowledge/antlr4)
-  - [LLVM简介](https://ycdxsb.gitbook.io/ucascompiler2021/basicknowledge/llvm)
-- AST抽象语法树生成器
-  - [Lab1：ANTLR4语法词法文件编写实验](https://ycdxsb.gitbook.io/ucascompiler2021/project/lab1)
-  - [Lab2：抽象语法树生成实验](https://ycdxsb.gitbook.io/ucascompiler2021/project/lab2)
-- LLVM中间代码生成器
+- [实验环境搭建](https://github.com/ycdxsb/UCASCompiler2021-Spring/tree/main/docs/Environment)
 
-
+- [工具介绍](https://github.com/ycdxsb/UCASCompiler2021-Spring/tree/main/docs/Tool)
+  - [ANTLR4](https://github.com/ycdxsb/UCASCompiler2021-Spring/blob/main/docs/Tool/ANTLR4.md)
+  - [LLVM](https://github.com/ycdxsb/UCASCompiler2021-Spring/blob/main/docs/Tool/LLVM.md)
+- [实验内容](https://github.com/ycdxsb/UCASCompiler2021-Spring/tree/main/docs/Lab)
+  - Lab1：ANTLR4语法词法文件编写实验
+    - [实验文档](https://github.com/ycdxsb/UCASCompiler2021-Spring/blob/main/docs/Lab/Lab1.md)
+  - Lab2：抽象语法树生成实验
+    - [实验文档](https://github.com/ycdxsb/UCASCompiler2021-Spring/blob/main/docs/Lab/Lab2.md)
 
 ## 参考资料
 
