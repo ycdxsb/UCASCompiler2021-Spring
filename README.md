@@ -19,10 +19,10 @@
   
 - [实验内容](https://github.com/ycdxsb/UCASCompiler2021-Spring/tree/main/docs/Lab)
 
-  - Lab1：ANTLR4语法词法文件编写实验
+  - Lab1：SafeC语法文件编写实验
     - [实验文档](https://github.com/ycdxsb/UCASCompiler2021-Spring/blob/main/docs/Lab/Lab1.md)
     - [项目地址](https://github.com/ycdxsb/UCASCompiler2021-Spring/blob/main/Lab1)
-  - Lab2：抽象语法树生成实验
+  - Lab2：SafeC抽象语法树生成实验
     - [实验文档](https://github.com/ycdxsb/UCASCompiler2021-Spring/blob/main/docs/Lab/Lab2.md)
 
 ## 参考资料
