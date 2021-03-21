@@ -72,6 +72,102 @@ Hello.interp            HelloLexer.tokens  Hello.tokens
 
 
 
+## ANTLR4 分析原理
+
+```
+prog
+    : assign    // 第一个选项（'|'是选项分隔符）
+    | ifstat    // 第二个选项
+    | whilestat
+    ...
+    
+assign : ID '=' expr ;    // 匹配赋值语句像"a=5"
+```
+
+上面简单的定义了一个prog语言，由赋值语句，if语句，while语句等组成
+
+
+
+我们以比较熟悉的赋值语句举例，它的语法如下
+
+```
+assign : ID '=' expr ;    // 匹配赋值语句像"a=5"
+```
+
+上面定义的意思是，Assign语句由ID,等于号,expr组成，等于号左侧是变量ID，右侧是表达式
+
+ANTLR4会根据我们写的语法规则，生成对应的递归下降语法分析器，是递归下降方法的集合，每一条语法规则都有相对应的分析方法。语法分析器会自顶向下的从根节点开始进行递归分析。
+
+赋值语句对应的分析方法如下：
+
+```
+// assign : ID '=' expr ;
+void assign() {    // 根据规则assign生成的方法
+    match(ID);     // 比较ID和当前输入符号然后消费
+    match('=');
+    expr();        // 通过调用expr()匹配表达式
+}
+```
+
+当语法分析器分析到赋值语句时，会先进行对ID的匹配，然后匹配等于号，最后调用expr方法进行对表达式的匹配分析
+
+而prog的分析方法则不同，如下，ANTLR4通过LL(*)算法，使用switch结构进行分析，这是因为当决定使用哪个分析方法时，必须要通过预读入的token决定走哪个分析分支：
+
+```
+void prog() {
+    switch ( «current input token» ) {
+        CASE ID : assign(); break;
+        CASE IF : ifstat(); break;    // IF是关键字'if'的记号类型
+        CASE WHILE : whilestat(); break;
+        ...
+        default : «raise no viable alternative exception»
+    }
+}
+```
+
+## ANTLR4二义性处理
+
+一个句子可以有多种解释，称为二义性，是我们在定义语言的时候需要避免的，下面是一些二义性语法的例子
+
+```
+assign
+    : ID '=' expr    // 匹配一个赋值语句，例如f()
+    | ID '=' expr    // 前面选项的精确复制
+    ;
+
+expr
+    : INT ;
+```
+
+虽然在我们人看来两个ID '=' expr是一样的，匹配哪个都可以，但是对于分析器来说，是十分不友好的
+
+```
+stat
+    : expr          // 表达式语句
+    | ID '(' ')'    // 函数调用语句
+    ;
+
+expr
+    : ID '(' ')'
+    | INT
+    ;
+```
+
+在这里，我们对于f()的解释可以是`stat->expr->ID '(' ')'`，也可以是`stat->ID '(' ')'`，具有歧义
+
+大部分语言都会被设计成非二义文法，如果发现存在二义时，语法分析器必须要进行选择来尽可能消除二义性，ANTLR4通过选择最先匹配到的语法规则来消除二义性
+
+例如我们定义了下列两个规则
+
+```
+BEGIN: 'begin';
+ID: [a-z]+;
+```
+
+当ANTLR4找到begin时，由于内部设定，会选择BEGIN规则进行匹配，而不是ID进行匹配。同时词法分析器也会为每个token进行尽可能长的匹配，因此遇到beginner时，会优先匹配ID，而不是BEGIN。
+
+
+
 ## 参考资料
 
 - [ANTLR4](https://www.antlr.org/)
