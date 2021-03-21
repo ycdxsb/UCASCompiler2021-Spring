@@ -37,6 +37,3 @@ number: IntConst;
 
 exp: 
 
-unaryOp: (Plus | Minus);
-
-binOp: Plus | Minus | Multiply | Divide | Modulo;
