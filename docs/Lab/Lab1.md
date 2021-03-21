@@ -154,9 +154,6 @@ number: IntConst;
 
 exp: 
 
-unaryOp: (Plus | Minus);
-
-binOp: Plus | Minus | Multiply | Divide | Modulo;
 ```
 
 可以看到，ANTLR4 语法文件的描述十分接近语言的EBNF描述，因此写起来十分简洁易懂，具体语法可参考 [parser rules](https://github.com/ANTLR/antlr4/blob/master/doc/parser-rules.md) 
