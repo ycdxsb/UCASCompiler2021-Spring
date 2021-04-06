@@ -10,15 +10,11 @@
 ## 课程实验
 
 本学期编译原理实验目的是让同学们更好的熟悉现代化的编译链，了解语法树生成和中间代码生成的过程，以及如何根据自身需求定制化一门语言
-
 - [实验环境搭建](https://github.com/ycdxsb/UCASCompiler2021-Spring/tree/main/docs/Environment)
-
 - [工具介绍](https://github.com/ycdxsb/UCASCompiler2021-Spring/tree/main/docs/Tool)
   - [ANTLR4](https://github.com/ycdxsb/UCASCompiler2021-Spring/blob/main/docs/Tool/ANTLR4.md)
   - [LLVM](https://github.com/ycdxsb/UCASCompiler2021-Spring/blob/main/docs/Tool/LLVM.md)
-  
 - [实验内容](https://github.com/ycdxsb/UCASCompiler2021-Spring/tree/main/docs/Lab)
-
   - Lab1：SafeC语法文件编写实验
     - [实验文档](https://github.com/ycdxsb/UCASCompiler2021-Spring/blob/main/docs/Lab/Lab1.md)
     - [项目地址](https://github.com/ycdxsb/UCASCompiler2021-Spring/blob/main/Lab1)
