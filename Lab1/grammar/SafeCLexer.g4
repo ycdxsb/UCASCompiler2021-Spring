@@ -77,6 +77,3 @@ IntConst:
 BlockComment :
 LineComment : 
 WhiteSpace: [ \t\r\n]+ -> skip;
-
-
-

@@ -32,6 +32,7 @@ make install
 ## Java环境
 `antlr4`赖于`java`环境，因此需要先配置`java`
 解压`jdk`压缩包
+
 ```
 tar -xvf jdk-8u221-linux-x64.tar.gz 
 mv jdk1.8.0_221 java8
@@ -93,3 +94,4 @@ cmake -G "Unix Makefiles" -DCMAKE_BUILD_TYPE=Release ..
 make -j4
 ```
 最后一步编译的`make -jn`需根据自身`CPU`核数而定，一般一两个小时可完成`llvm`的编译，如果编译过程中出现错误，在解决问题后重新编译时，会从出错位置继续编译，不用过于担心，主机内存较小时，可以使用`make -j1`缓慢编译
+
