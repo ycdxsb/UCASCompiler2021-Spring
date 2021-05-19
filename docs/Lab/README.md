@@ -21,16 +21,19 @@ Safe C语言是C语言的子集，但是增加了对数组的关键字扩展，�
 CompUnit    → [ CompUnit ] ( Decl | FuncDef )
 Decl        → ConstDecl
             | VarDecl
-Obc	    → 'obc'
+Obc	        → 'obc'
 BType       → 'int'
+ConstDecl   → 'const' BType ConstDef { ',' ConstDef } ';'
+ConstDef    → Ident '=' Exp
+            | Ident '[' [ Exp ] ']' '=' '{' Exp { ',' Exp } '}'
 VarDecl     → BType VarDef { ',' VarDef } ';'
-UnObcArray  → Ident '[' Exp ']'
-ObcArray    → Obc Ident '[' Exp ']'
-Array       → ObcArray | UnObcArray 
 VarDef      → Ident
             | Array
             | Ident '=' Exp
             | Array '=' '{' Exp { ',' Exp } '}'
+UnObcArray  → Ident '[' Exp ']'
+ObcArray    → Obc Ident '[' Exp ']'
+Array       → ObcArray | UnObcArray 
 FuncDef     → void Ident '(' ')' Block
 Block       → '{' { BlockItem } '}'
 BlockItem   → Decl
