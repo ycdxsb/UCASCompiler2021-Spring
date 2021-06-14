@@ -2,7 +2,7 @@
 
 1. 熟悉LLVM IR 表示和 中间代码生成的相关接口(IRBuilder)
 
-2. 熟悉在IR生成中对while , if else等教复杂语句的生成
+2. 熟悉在IR生成中对while , if else等较复杂语句的生成
 
 3. 对有obc属性的数组访问进行越界检查，插入检查代码，在数组访问越界时进行报错和错误处理
 
@@ -164,29 +164,28 @@ LLVM IR是
     bool lval_as_rval;
     bool in_global;
     bool constexpr_expected;
-    bool error_flag;
 
     void enter_scope() { variables.emplace_front(); }
 
     void exit_scope() { variables.pop_front(); }
 
-    std::tuple<llvm::Value *, bool, bool, bool> lookup_variable(std::string name)
+    std::tuple<llvm::Value *, bool, bool, bool, int> lookup_variable(std::string name)
     {
         for (auto m : variables)
             if (m.count(name))
                 return m[name];
-        return std::make_tuple((llvm::Value *)nullptr, false, false, false);
+        return std::make_tuple((llvm::Value *)nullptr, false, false, false, 0);
     }
 
-    bool declare_variable(std::string name, llvm::Value *var_ptr, bool is_const, bool is_array, bool is_obc)
+    bool declare_variable(std::string name, llvm::Value *var_ptr, bool is_const, bool is_array, bool is_obc, int array_length)
     {
         if (variables.front().count(name))
             return false;
-        variables.front()[name] = std::make_tuple(var_ptr, is_const, is_array, is_obc);
+        variables.front()[name] = std::make_tuple(var_ptr, is_const, is_array, is_obc, array_length);
         return true;
     }
 
-    std::deque<std::unordered_map<std::string, std::tuple<llvm::Value *, bool, bool, bool>>> variables;
+    std::deque<std::unordered_map<std::string, std::tuple<llvm::Value *, bool, bool, bool, int>>> variables;
 
     std::unordered_map<std::string, llvm::Function *> functions;
 ```
@@ -205,19 +204,17 @@ LLVM IR是
   - `declare_variable`：当遇到变量声明时，使用`declare_variable`声明变量，将信息存储到`variables`中，如果已声明改变量，则返回`false`，否则返回`true`
 - `functions`：用于存储所有的函数
 
-#### 静态语义检查
+#### 静态语义检查（不要求）
 
-在代码生成的过程中，需要进行一些语义上的简单检查，当检查到问题时，应该**报错并退出**中间代码的生成程序
+在代码生成的过程中，可以顺便进行一些语义上的简单检查，当检查到问题时，应当进行合适的报错，例如
 
 - 重复声明检查：函数、变量的重复声明
 - 未定义使用检查：在使用变量前，应当先定义
 - 算数运算检查：例如除数和模数不应该为0等等
 - 左值检查：赋值运算的左值不能为常量等等。
 - 数组越界检查：例如定义了`a[2]`，但是访问`a[3]`这类不需要做 静态数据流分析 的简单情形
-
-#### 动态数组越界检查
-
-对于一些数组，我们是有obc属性的，当我们不确定具体访问的范围时，应当插入代码进行动态执行检查，例如`int idx = 3; int obc a[2]; a[idx]=1;`这类，当我们未进行静态数据流分析时，并不知道`a[idx]`会访问哪一块空间，因此需要在`IR`生成中加入动态检查代码
+- 声明了数组`a[2]`，却访问变量`a`；或者声明了变量`a`，却访问`a[2]`
+- ...
 
 #### 函数创建
 
@@ -348,6 +345,118 @@ entry:
 
 最后执行中间代码，输出`output:10`。
 
+## 动态数组越界检查
+
+对于一些数组，我们是有obc属性的，当我们不确定具体访问的范围时，应当插入代码进行动态执行检查，例如`int idx = 3; int obc a[2]; a[idx]=1;`这类，当我们未进行静态数据流分析时，并不知道`a[idx]`会访问哪一块空间，因此需要在`IR`生成中加入动态检查代码
+
+在`runtime.h`中，有`line、pos、str`三个全局变量，报错通过`io.h`中的`obc_check_error`输出信息
+
+```c
+// runtime.h
+llvm::GlobalVariable *line;
+llvm::GlobalVariable *pos;
+llvm::GlobalVariable *str;
+
+// io.h
+void obc_check_error(int *,int *,char*);
+```
+
+只要将节点的行列信息和变量名分别存入`line、pos`和`str`中，并插入函数调用即可插入运行时越界检查的代码
+
+```c
+line = ConstantInt::get(Type::getInt32Ty(context), node_line);
+builder.CreateStore(line, line_addr);
+pos = ConstantInt::get(Type::getInt32Ty(context), node_pos);
+builder.CreateStore(pos, pos_addr);        
+str = ConstantDataArray::getString(module->getContext(),(string("obc Array") + string("[") + name + string("]")).c_str(), true);
+builder.CreateStore(str, str_addr);
+        
+builder.CreateCall(functions["obc_check_error"], {});
+```
+
+**示例**
+
+```c
+$ cat -n simple.c 
+     1  int n = 20;
+     2  int obc fib[50] = {0};
+     3  void fib(){
+     4      fib[0] = 1;
+     5      fib[1] = 1;
+     6      int i = 2;
+     7      while(i < n){
+     8          fib[i] = fib[i-1] + fib[i-2];
+     9          i = i + 1;
+    10      }        
+    11  }
+    12  void output_fib(){
+    13      int i = 0;
+    14      while(i < n){
+    15          output_var = fib[i];
+    16          output();
+    17          i = i + 1;
+    18      }
+    19  }
+    20  void main(){
+    21      fib();
+    22      output_fib();
+    23      fib[51] = 0;
+    24  }
+$ ./irbuilder simple.c 
+...
+output:1
+output:1
+output:2
+output:3
+output:5
+output:8
+output:13
+output:21
+output:34
+output:55
+output:89
+output:144
+output:233
+output:377
+output:610
+output:987
+output:1597
+output:2584
+output:4181
+output:6765
+obc Array[fib] [OutBound Check Error] at Line:23, Pos:4
+```
+
+
+
+## 代码编译和使用
+
+### 编译
+
+修改`CMakeLists.txt`中的`ANTLR_EXECUTABLE`路径，为自己环境中`jar`包所在路径
+
+```
+set(ANTLR_EXECUTABLE /home/ucascompile/ucascompile/antlr4/antlr-4.9.1-complete.jar)
+```
+
+1. 新建`build`目录`mkdir build`
+2. 在`build`目录下使用`cmake .. && make`编译
+3. 编译成功后会在`build`目录下生成名为`irbuilder`的可执行文件
+
+### 使用
+
+使用方法：`./irbuilder filepath`或`./astbuilder filepath -d`，当使用`-d`命令时，会输出`debug`信息，`debug`信息需要通过在代码中添加`log`函数输出，可以帮助调试
+
+
+
 ##   参考资料
 
 - https://llvm.org/docs/LangRef.html
+- https://github.com/llvm/llvm-project/blob/main/llvm/include/llvm/IR/IRBuilder.h
+- [IR API(一)——使用LLVM提供的C接口和IRBuilder来生成LLVM IR(if 和 while 语句)](https://blog.csdn.net/qq_42570601/article/details/107771289)
+- [IR API(二)——使用LLVM IR调用C的函数和全局变量](https://blog.csdn.net/qq_42570601/article/details/107958398)
+- [IR API(三)——将C/C++中定义的结构体作为LLVM IR中函数的实参](https://blog.csdn.net/qq_42570601/article/details/107979539)
+- [IR API(四)——操作IR的字符串、全局变量、全局常量及数组](https://blog.csdn.net/qq_42570601/article/details/108007986)
+- [IR API(五)——使用LLVM提供的C接口和IRBuilder来生成LLVM IR常用方法总结](https://blog.csdn.net/qq_42570601/article/details/108059403)
+- [IR API(六)——LLVM异常处理(Exception Handling in LLVM)](https://blog.csdn.net/qq_42570601/article/details/109602543)
+
