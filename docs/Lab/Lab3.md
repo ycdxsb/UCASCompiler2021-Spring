@@ -1,12 +1,9 @@
 ## 实验任务
 
-1. 熟悉LLVM IR 表示和 中间代码生成的相关接口(IRBuilder)
-
-2. 熟悉在IR生成中对while , if else等较复杂语句的生成
-
-3. 对有obc属性的数组访问进行越界检查，插入检查代码，在数组访问越界时进行报错和错误处理
-
-   
+1. 熟悉`LLVM IR `表示和 中间代码生成的相关接口`(IRBuilder)`
+2. 基于实验二`AstBuilder`结果，补充实现`SafeCIRBuilder`类中的visit函数
+3. 熟悉在`IR`生成中对`while , if else`等较复杂语句的处理
+4. 对有`obc`属性的数组访问进行越界检查，插入检查代码，在数组访问越界时进行错误处理
 
 ## SafeCGrammar
 
@@ -52,9 +49,47 @@ BinOp       → '+' | '−' | '*' | '/' | '%'
 UnaryOp     → '+' | '−'
 ```
 
-## LLVM 中间代码生成
+## 实验框架介绍
 
-在实验二中，我们已经实现了`AstBuilder.cpp`，能够根据`ANTLR4`语法分析的结果，生成对应的抽象语法树。本次实验利用生成的抽象语法树，通过遍历生成的抽象语法树节点，调用`LLVM`的中间代码生成接口，生成对应的中间代码。
+在实验二中，我们已经实现了`AstBuilder`类，能够根据`ANTLR4`语法分析的结果，生成对应的抽象语法树。本次实验利用生成的抽象语法树，通过遍历生成的抽象语法树节点，调用`LLVM`的中间代码生成接口，生成对应的中间代码。
+
+### 项目结构
+
+```shell
+Lab3
+├── cmake
+│   ├── antlr4-generator.cmake.in
+│   ├── Antlr4Package.md
+│   ├── antlr4-runtime.cmake.in
+│   ├── ExternalAntlr4Cpp.cmake
+│   ├── FindANTLR.cmake
+│   └── README.md
+├── CMakeLists.txt
+├── include
+│   ├── AstBuilder.h
+│   ├── AstNode.h
+│   ├── AstNode_Visitor.h
+│   ├── AstSerializer.h
+│   └── SafeCIRBuilder.h
+├── main.cpp
+├── runtime
+│   ├── io.cpp
+│   ├── io.h
+│   ├── runtime.cpp
+│   └── runtime.h
+├── SafeCLexer.g4
+├── SafeCParser.g4
+└── src
+    └── AstBuilder.cpp
+```
+
+- `cmake`：编译依赖的`cmake`文件
+- `CMakeLists.txt`：项目编译用的`config`文件
+- `AstNode.h/AstNode_Visitor.h`：同`Lab2`
+- `AstBuilder.h/AstBuilder.cpp`：`Lab2`实验内容代码
+- `SafeCIRBuilder.h`：`SafeCIRBuilder`类实现代码，也是实验需要修改的代码
+- `runtime/*`：运行时所需文件
+- `*.g4`：`Lab1`中实现的语法文件
 
 ### main函数逻辑
 
@@ -142,7 +177,377 @@ int main(int argc, const char **argv)
 
 ### LLVM IR Builder
 
-LLVM IR是
+`LLVM IRBuilder`提供了接口，来帮助生成中间代码
+
+对于下面求fib的源代码
+
+```c
+int fib(int n) {
+  if (n == 0)
+    return 0;
+  else if (n == 1)
+    return 1;
+  else
+    return fib(n - 1) + fib(n - 2);
+}
+int main() {
+  int x = 0;
+  for (int i = 1; i < 8; ++i) {
+    x += fib(i);
+  }
+  return x;
+}
+```
+
+#### clang生成IR
+
+我们可以使用`clang`生成对应的`IR`表示：`clang -emit-llvm fib.c -S -o clang_fib.ll`如下
+
+```c
+; ModuleID = 'fib.c'
+source_filename = "fib.c"
+target datalayout = "e-m:e-p270:32:32-p271:32:32-p272:64:64-i64:64-f80:128-n8:16:32:64-S128"
+target triple = "x86_64-unknown-linux-gnu"
+
+; Function Attrs: noinline nounwind optnone uwtable
+define dso_local i32 @fib(i32 %0) #0 {
+  %2 = alloca i32, align 4
+  %3 = alloca i32, align 4
+  store i32 %0, i32* %3, align 4
+  %4 = load i32, i32* %3, align 4
+  %5 = icmp eq i32 %4, 0
+  br i1 %5, label %6, label %7
+
+6:                                                ; preds = %1
+  store i32 0, i32* %2, align 4
+  br label %19
+
+7:                                                ; preds = %1
+  %8 = load i32, i32* %3, align 4
+  %9 = icmp eq i32 %8, 1
+  br i1 %9, label %10, label %11
+
+10:                                               ; preds = %7
+  store i32 1, i32* %2, align 4
+  br label %19
+
+11:                                               ; preds = %7
+  %12 = load i32, i32* %3, align 4
+  %13 = sub nsw i32 %12, 1
+  %14 = call i32 @fib(i32 %13)
+  %15 = load i32, i32* %3, align 4
+  %16 = sub nsw i32 %15, 2
+  %17 = call i32 @fib(i32 %16)
+  %18 = add nsw i32 %14, %17
+  store i32 %18, i32* %2, align 4
+  br label %19
+
+19:                                               ; preds = %11, %10, %6
+  %20 = load i32, i32* %2, align 4
+  ret i32 %20
+}
+
+; Function Attrs: noinline nounwind optnone uwtable
+define dso_local i32 @main() #0 {
+  %1 = alloca i32, align 4
+  %2 = alloca i32, align 4
+  %3 = alloca i32, align 4
+  store i32 0, i32* %1, align 4
+  store i32 0, i32* %2, align 4
+  store i32 1, i32* %3, align 4
+  br label %4
+
+4:                                                ; preds = %12, %0
+  %5 = load i32, i32* %3, align 4
+  %6 = icmp slt i32 %5, 8
+  br i1 %6, label %7, label %15
+
+7:                                                ; preds = %4
+  %8 = load i32, i32* %3, align 4
+  %9 = call i32 @fib(i32 %8)
+  %10 = load i32, i32* %2, align 4
+  %11 = add nsw i32 %10, %9
+  store i32 %11, i32* %2, align 4
+  br label %12
+
+12:                                               ; preds = %7
+  %13 = load i32, i32* %3, align 4
+  %14 = add nsw i32 %13, 1
+  store i32 %14, i32* %3, align 4
+  br label %4
+
+15:                                               ; preds = %4
+  %16 = load i32, i32* %2, align 4
+  ret i32 %16
+}
+
+attributes #0 = { noinline nounwind optnone uwtable "correctly-rounded-divide-sqrt-fp-math"="false" "disable-tail-calls"="false" "frame-pointer"="all" "less-precise-fpmad"="false" "min-legal-vector-width"="0" "no-infs-fp-math"="false" "no-jump-tables"="false" "no-nans-fp-math"="false" "no-signed-zeros-fp-math"="false" "no-trapping-math"="true" "stack-protector-buffer-size"="8" "target-cpu"="x86-64" "target-features"="+cx8,+fxsr,+mmx,+sse,+sse2,+x87" "unsafe-fp-math"="false" "use-soft-float"="false" }
+
+!llvm.module.flags = !{!0}
+!llvm.ident = !{!1}
+
+!0 = !{i32 1, !"wchar_size", i32 4}
+!1 = !{!"clang version 11.0.0"}
+
+```
+
+可以使用`lli`运行该IR，然后在shell中使用`echo $?`查看返回值
+
+#### 手写IR
+
+也可以像写汇编代码一样，写IR代码，如下
+
+```asm
+define i32 @fib(i32) {
+    %2 = alloca i32, align 4 ;申请缓存区，得到指针i32* %2
+    %3 = alloca i32, align 4 ;申请缓存区，得到指针i32* %3
+    store i32 %0 , i32* %3, align 4 ;将形参 %0 的值放入内存
+    %4 = load i32,i32* %3, align 4  ;读取形参到%4
+    %5 = icmp eq i32 %4, 0  ; 与0比较是否相等
+    br i1 %5, label %br1, label %br2 ;相等则转到标签br1，否则转到br2
+
+    br1:
+    ret i32 0   ; n等于0 ，返回0
+
+    br2:
+    %6 = load i32,i32* %3, align 4
+    %7 = icmp eq i32 %6, 1  ;与1比较
+    br i1 %7, label %br3, label %br4
+
+    br3:
+    ret i32 1   ; n等于1，返回1
+
+    br4:
+    %8 = load i32, i32* %3, align 4
+    %9 = sub nsw i32 %8, 1
+    %10 = call i32 @fib(i32 %9) ; 求fib(n-1)
+    %11 = load i32, i32* %3, align 4
+    %12 = sub nsw i32 %11, 2
+    %13 = call i32 @fib(i32 %12) ; 求fib(n-2)
+    %14 = add nsw i32 %10,%13
+    ret i32 %14 ; 返回结果
+}
+
+define i32 @main() {
+    %1 = alloca i32, align 4 ; 为局部变量 x 分配栈空间
+    %2 = alloca i32, align 4 ; 为局部变量 i 分配栈空间
+    store i32 0, i32* %1, align 4 ; x = 0
+    store i32 1, i32* %2, align 4 ; i = 1
+    br label %br1
+
+    br1:
+    %3 = load i32,i32* %2, align 4 ; 读取 i 的值
+    %4 = icmp slt i32 %3, 8 ; 和8比较，看是否跳出循环
+    br i1 %4,label %br2, label %br3 ; 判断成立，跳转到br2，否则跳转到br3
+
+    br2:
+    %5 = load i32, i32* %2, align 4 ; 读取 i 的值
+    %6 = call i32 @fib(i32 %5)  ; 调用函数fib(i)，获得结果
+    %7 = load i32 ,i32* %1, align 4 ; 读取 x 的值
+    %8 = add nsw i32 %6, %7 ; x += fib(i)
+    store i32 %8, i32* %1, align 4 ; 将结果存入 x 中
+    %9 = add nsw i32 %5, 1 ; i = i + 1
+    store i32 %9,i32* %2, align 4 ; 将结果存入 i 中
+    br label %br1 ; 跳转到循环起始处继续执行
+
+    br3:
+    %10 = load i32,i32* %1, align 4 ; 读取 i 的值
+    ret i32 %10 ; 返回 i 的值
+}
+```
+
+#### IRBuilder生成IR
+
+```c++
+#include <llvm/IR/BasicBlock.h>
+#include <llvm/IR/Constants.h>
+#include <llvm/IR/DerivedTypes.h>
+#include <llvm/IR/Function.h>
+#include <llvm/IR/IRBuilder.h>
+#include <llvm/IR/LLVMContext.h>
+#include <llvm/IR/Module.h>
+#include <llvm/IR/Type.h>
+#include <llvm/IR/Verifier.h>
+
+#include <memory>
+
+using namespace llvm;
+
+int main()
+{
+    LLVMContext context;
+    IRBuilder<> builder(context);
+    // 新建一个 module，名为fib
+    auto module = new Module("fib", context);
+    // 将常数转换为 Value 类型
+    auto zero = ConstantInt::get(Type::getInt32Ty(context), 0);
+    auto one = ConstantInt::get(Type::getInt32Ty(context), 1);
+    auto two = ConstantInt::get(Type::getInt32Ty(context), 2);
+    auto eight = ConstantInt::get(Type::getInt32Ty(context), 8);
+
+    // 新建函数fib，参数为int类型
+    std::vector<Type *> arg;
+    arg.push_back(builder.getInt32Ty());
+    auto fib = Function::Create(FunctionType::get(Type::getInt32Ty(context), arg, false),
+                                GlobalValue::LinkageTypes::ExternalLinkage,
+                                "fib", module); //新建函数fib
+    // 新建入口点基本块 entry
+    auto entry = BasicBlock::Create(context, "entry", fib);
+    builder.SetInsertPoint(entry);
+    auto r2 = builder.CreateAlloca(Type::getInt32Ty(context), nullptr, "r2");
+    auto r3 = builder.CreateAlloca(Type::getInt32Ty(context), nullptr, "r3");
+    Value *r0 = fib->arg_begin();
+    builder.CreateStore(r0, r3);
+    auto r4 = builder.CreateLoad(Type::getInt32Ty(context), r3, "r4");
+    auto r5 = builder.CreateICmpEQ(r4, zero, "r5");
+
+    auto br1 = BasicBlock::Create(context, "br1", fib);
+    auto br2 = BasicBlock::Create(context, "br2", fib);
+
+    builder.CreateCondBr(r5, br1, br2);
+
+    //br1
+    builder.SetInsertPoint(br1);
+    builder.CreateRet(zero);
+
+    //br2
+    builder.SetInsertPoint(br2);
+    auto r6 = builder.CreateLoad(Type::getInt32Ty(context), r3, "r6");
+    auto r7 = builder.CreateICmpEQ(r6, one, "r7");
+    auto br3 = BasicBlock::Create(context, "br3", fib);
+    auto br4 = BasicBlock::Create(context, "br4", fib);
+    builder.CreateCondBr(r7, br3, br4);
+
+    // br3
+    builder.SetInsertPoint(br3);
+    builder.CreateRet(one);
+
+    // br4
+    builder.SetInsertPoint(br4);
+    auto r8 = builder.CreateLoad(Type::getInt32Ty(context), r3, "r8");
+    auto r9 = builder.CreateNSWSub(r8, one, "r9");
+    auto r10 = builder.CreateCall(fib, {r9}, "r10");
+    auto r11 = builder.CreateLoad(Type::getInt32Ty(context), r3, "r11");
+    auto r12 = builder.CreateNSWSub(r11, two, "r12");
+    auto r13 = builder.CreateCall(fib, {r12}, "r13");
+    auto r14 = builder.CreateNSWAdd(r10, r13, "r14");
+    builder.CreateRet(r14);
+    
+    //新建函数 main
+    auto main = Function::Create(FunctionType::get(Type::getInt32Ty(context), std::vector<Type *>(), false),
+                             GlobalValue::LinkageTypes::ExternalLinkage,
+                             "main", module); 
+    auto mentry = BasicBlock::Create(context, "entry", main);
+    builder.SetInsertPoint(mentry);
+    auto m1 = builder.CreateAlloca(Type::getInt32Ty(context), nullptr, "r1");
+    auto m2 = builder.CreateAlloca(Type::getInt32Ty(context), nullptr, "r2");
+    builder.CreateStore(zero, m1);
+    builder.CreateStore(one, m2);
+    auto mbr1 = BasicBlock::Create(context, "br1", main);
+    builder.CreateBr(mbr1);
+
+    // br1
+    builder.SetInsertPoint(mbr1);
+    auto m3 = builder.CreateLoad(Type::getInt32Ty(context), m2, "r3");
+    auto m4 = builder.CreateICmpSLT(m3, eight, "r4");
+    auto mbr2 = BasicBlock::Create(context, "br2", main);
+    auto mbr3 = BasicBlock::Create(context, "br3", main);
+    builder.CreateCondBr(m4, mbr2, mbr3);
+    
+    // br2
+    builder.SetInsertPoint(mbr2);
+    auto m5 = builder.CreateLoad(Type::getInt32Ty(context), m2, "r5");
+    auto m6 = builder.CreateCall(fib,{m5},"r6");
+    auto m7 = builder.CreateLoad(Type::getInt32Ty(context),m1,"r7"); 
+    auto m8 = builder.CreateNSWAdd(m6,m7,"r8");
+    builder.CreateStore(m8,m1);
+    auto m9 = builder.CreateNSWAdd(m5,one,"r9");
+    builder.CreateStore(m9,m2);
+    builder.CreateBr(mbr1);
+
+    // br3
+    builder.SetInsertPoint(mbr3);
+    auto m10 = builder.CreateLoad(Type::getInt32Ty(context),m1,"r10");
+    builder.CreateRet(m10);
+
+    module->print(outs(), nullptr);
+    return 0;
+}
+```
+
+使用命令编译该代码，并运行
+
+```
+c++ gen_fib.cpp -o gen_fib  `llvm-config --cxxflags --ldflags --libs --system-libs`
+```
+
+可以获得生成的IR如下：
+
+```asm
+; ModuleID = 'fib'
+source_filename = "fib"
+
+define i32 @fib(i32 %0) {
+entry:
+  %r2 = alloca i32, align 4
+  %r3 = alloca i32, align 4
+  store i32 %0, i32* %r3, align 4
+  %r4 = load i32, i32* %r3, align 4
+  %r5 = icmp eq i32 %r4, 0
+  br i1 %r5, label %br1, label %br2
+
+br1:                                              ; preds = %entry
+  ret i32 0
+
+br2:                                              ; preds = %entry
+  %r6 = load i32, i32* %r3, align 4
+  %r7 = icmp eq i32 %r6, 1
+  br i1 %r7, label %br3, label %br4
+
+br3:                                              ; preds = %br2
+  ret i32 1
+
+br4:                                              ; preds = %br2
+  %r8 = load i32, i32* %r3, align 4
+  %r9 = sub nsw i32 %r8, 1
+  %r10 = call i32 @fib(i32 %r9)
+  %r11 = load i32, i32* %r3, align 4
+  %r12 = sub nsw i32 %r11, 2
+  %r13 = call i32 @fib(i32 %r12)
+  %r14 = add nsw i32 %r10, %r13
+  ret i32 %r14
+}
+
+define i32 @main() {
+entry:
+  %r1 = alloca i32, align 4
+  %r2 = alloca i32, align 4
+  store i32 0, i32* %r1, align 4
+  store i32 1, i32* %r2, align 4
+  br label %br1
+
+br1:                                              ; preds = %br2, %entry
+  %r3 = load i32, i32* %r2, align 4
+  %r4 = icmp slt i32 %r3, 8
+  br i1 %r4, label %br2, label %br3
+
+br2:                                              ; preds = %br1
+  %r5 = load i32, i32* %r2, align 4
+  %r6 = call i32 @fib(i32 %r5)
+  %r7 = load i32, i32* %r1, align 4
+  %r8 = add nsw i32 %r6, %r7
+  store i32 %r8, i32* %r1, align 4
+  %r9 = add nsw i32 %r5, 1
+  store i32 %r9, i32* %r2, align 4
+  br label %br1
+
+br3:                                              ; preds = %br1
+  %m10 = load i32, i32* %r1, align 4
+  ret i32 %m10
+}
+```
+
+
 
 ### SafecIRBuilder
 
@@ -429,6 +834,8 @@ obc Array[fib] [OutBound Check Error] at Line:23, Pos:4
 
 
 
+
+
 ## 代码编译和使用
 
 ### 编译
@@ -446,6 +853,42 @@ set(ANTLR_EXECUTABLE /home/ucascompile/ucascompile/antlr4/antlr-4.9.1-complete.j
 ### 使用
 
 使用方法：`./irbuilder filepath`或`./astbuilder filepath -d`，当使用`-d`命令时，会输出`debug`信息，`debug`信息需要通过在代码中添加`log`函数输出，可以帮助调试
+
+
+
+## 实验提交要求
+
+1. 新建`test_cases`文件夹，构造**带有输出**的测试样例`10`个，尽可能的对自己实现的代码进行覆盖性测试，无具体命名格式要求
+2. 最终提交时，实验目录如下，**不需要提交build目录**：
+
+```
+Lab3
+├── cmake
+│   ├── antlr4-generator.cmake.in
+│   ├── Antlr4Package.md
+│   ├── antlr4-runtime.cmake.in
+│   ├── ExternalAntlr4Cpp.cmake
+│   ├── FindANTLR.cmake
+│   └── README.md
+├── CMakeLists.txt
+├── include
+│   ├── AstBuilder.h
+│   ├── AstNode.h
+│   ├── AstNode_Visitor.h
+│   ├── AstSerializer.h
+│   └── SafeCIRBuilder.h
+├── main.cpp
+├── runtime
+│   ├── io.cpp
+│   ├── io.h
+│   ├── runtime.cpp
+│   └── runtime.h
+├── SafeCLexer.g4
+├── SafeCParser.g4
+├── src
+│   └── AstBuilder.cpp
+└── test_cases
+```
 
 
 
