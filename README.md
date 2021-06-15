@@ -20,6 +20,8 @@
     - [实验文档](https://github.com/ycdxsb/UCASCompiler2021-Spring/blob/main/docs/Lab/Lab2.md)
     - [项目地址](https://github.com/ycdxsb/UCASCompiler2021-Spring/tree/main/Lab2)
   - Lab3:SafeC LLVM 中间代码生成实验
+    - [实验文档](https://github.com/ycdxsb/UCASCompiler2021-Spring/blob/main/docs/Lab/Lab3.md)
+    - [项目地址](https://github.com/ycdxsb/UCASCompiler2021-Spring/tree/main/Lab3)
 
 
 ## 参考资料
