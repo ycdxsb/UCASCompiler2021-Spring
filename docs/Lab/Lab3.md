@@ -569,6 +569,7 @@ br3:                                              ; preds = %br1
     bool lval_as_rval;
     bool in_global;
     bool constexpr_expected;
+    bool error_flag;
 
     void enter_scope() { variables.emplace_front(); }
 
@@ -603,15 +604,16 @@ br3:                                              ; preds = %br1
 - `lval_as_rval` ：用于表示当前上下文以何种方式使用正要处理的左值。如为真(即右值)，则 `visit(lval_syntax &)` 应对得到的左值地址取值；否则不进行取值
 - `in_global` ：用于表示当前是否处于全局区域，是为了区分变量声明语句 `var_def_stmt_syntax` 在全局和局部的不同行为而设立的 `flag`
 - `constexpr_expected`：用于标志将表达式结果存储在`value_result`还是在`int_const_result`中，避免存取出错
+- `error_flag`：在遍历`ASTNode`生成`IR`过程中，如果出现一些基本的语义错误，应当设置`error_flag`为`false`，并输出错误信息
 - `variables`：用于存储所有的变量
   - `enter_scope`：用于管理变量作用域，例如在进入函数体前，会使用`enter_scope`新建一个`std::unordered_map<std::string, std::tuple<llvm::Value *, bool, bool, bool>>`存储该作用域内的变量
-  - `exit_scope`：用于管理变量作用域，与`enter_scope`相应
+  - `exit_scope`：用于管理变量作用域，与`enter_scope`对应
   - `declare_variable`：当遇到变量声明时，使用`declare_variable`声明变量，将信息存储到`variables`中，如果已声明改变量，则返回`false`，否则返回`true`
 - `functions`：用于存储所有的函数
 
 #### 静态语义检查（不要求）
 
-在代码生成的过程中，可以顺便进行一些语义上的简单检查，当检查到问题时，应当进行合适的报错，例如
+在代码生成的过程中，可以顺便进行一些语义上的简单检查，当检查到问题时，应当将`error_flag`设置为`true`并进行合适的报错，例如
 
 - 重复声明检查：函数、变量的重复声明
 - 未定义使用检查：在使用变量前，应当先定义
@@ -832,7 +834,34 @@ output:6765
 obc Array[fib] [OutBound Check Error] at Line:23, Pos:4
 ```
 
+## 实验内容
 
+**在实验前一定要仔细阅读文档内容！！！**
+
+在`SafeCIRBuilder.h`中有一个继承了`AstNode_Visitor`的类，用于对`Ast`节点通过访问者模式进行访问(访问者模式的使用可以参考实验2中的`AstSerializer.h`中的使用)
+
+实验需要同学们在理解实验代码的基础上，补充完成`SafeCIRBuilder.h`中`visit`函数的实现，如下：
+
+```
+    virtual void visit(comp_root &node) override;
+    virtual void visit(compunit_node &node) override;
+    virtual void visit(global_def_node &node) override;
+    virtual void visit(func_def_node &node) override;
+    virtual void visit(expr_node &node) override;
+    virtual void visit(cond_node &node) override;
+    virtual void visit(binop_expr_node &node) override;
+    virtual void visit(unaryop_expr_node &node) override;
+    virtual void visit(lval_node &node) override;
+    virtual void visit(number_node &node) override;
+    virtual void visit(stmt_node &node) override;
+    virtual void visit(var_def_stmt_node &node) override;
+    virtual void visit(assign_stmt_node &node) override;
+    virtual void visit(func_call_stmt_node &node) override;
+    virtual void visit(block_node &node) override;
+    virtual void visit(if_stmt_node &node) override;
+    virtual void visit(while_stmt_node &node) override;
+    virtual void visit(empty_stmt_node &node) override;
+```
 
 
 
@@ -875,7 +904,6 @@ Lab3
 │   ├── AstBuilder.h
 │   ├── AstNode.h
 │   ├── AstNode_Visitor.h
-│   ├── AstSerializer.h
 │   └── SafeCIRBuilder.h
 ├── main.cpp
 ├── runtime
